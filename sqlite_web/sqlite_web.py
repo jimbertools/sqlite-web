@@ -183,6 +183,11 @@ class SqliteDataSet(DataSet):
             '%s_%s' % (virtual_table, suffix) for suffix in suffixes
             for virtual_table in virtual_tables)
 
+    def get_saved_queries(self):
+        cursor = self.query(
+            'SELECT name, query, id FROM jimber_queries'
+        )
+        return set([row for row in cursor.fetchall()])
 #
 # Flask views.
 #
@@ -462,9 +467,18 @@ def table_content(table):
         total_pages=total_pages,
         total_rows=total_rows)
 
+@app.route('/deletequery/', methods=['GET', 'POST'])
+def deletequery():
+    if request.args.get('id'):
+        id = request.args.get('id')
+        query = "DELETE FROM jimber_queries WHERE id=?"
+        dataset.query(query, [id])
+    return render_template('index.html', sqlite=sqlite3)
+
 @app.route('/<table>/query/', methods=['GET', 'POST'])
 @require_table
 def table_query(table):
+    displayquery = True
     data = []
     data_description = error = row_count = sql = None
 
@@ -474,6 +488,16 @@ def table_query(table):
             return export(table, sql, 'json')
         elif 'export_csv' in request.form:
             return export(table, sql, 'csv')
+        elif 'save' in request.form:
+            name = request.form['name']
+            save_query = """INSERT INTO jimber_queries(name, query)
+                VALUES ( ?, ?)""" 
+            
+            dataset.query(save_query, [name, sql])
+
+            return render_template(
+                'query_saved.html'
+            )
 
         try:
             cursor = dataset.query(sql)
@@ -486,6 +510,17 @@ def table_query(table):
     else:
         if request.args.get('sql'):
             sql = request.args.get('sql')
+
+            try:
+                cursor = dataset.query(sql)
+            except Exception as exc:
+                error = str(exc)
+            else:
+                displayquery = False
+                data = cursor.fetchall()[:app.config['MAX_RESULT_SIZE']]
+                data_description = cursor.description
+                row_count = cursor.rowcount
+            
         else:
             sql = 'SELECT *\nFROM "%s"' % (table)
 
@@ -502,7 +537,8 @@ def table_query(table):
         row_count=row_count,
         sql=sql,
         table=table,
-        table_sql=table_sql)
+        table_sql=table_sql,
+        displayquery=displayquery)
 
 @app.route('/table-definition/', methods=['POST'])
 def set_table_definition_preference():

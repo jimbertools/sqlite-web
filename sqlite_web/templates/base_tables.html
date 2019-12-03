@@ -28,4 +28,11 @@
       </li>
     {% endfor %}
   </ul>
+  <hr />
+  <p>Saved queries</p>
+  <ul class="nav flex-column nav-pills" role="tablist">
+      {% for query in dataset.get_saved_queries()|sort %}
+      <li><a style="color:red" href="/deletequery/?id={{query[2]}}">X</a><a href="/jimber_queries/query/?sql={{query[1]}}">{{query[0]}}</a></li>
+      {% endfor %}
+  </ul>
 {% endblock %}
